@@ -1,6 +1,7 @@
 """
 AeroNet Lite - Central Configuration
-All project-wide constants, paths, and tunable parameters.
+# All project-wide constants, paths, and tunable parameters.
+# Updated for v2.0 dashboard integration.
 """
 
 from pathlib import Path

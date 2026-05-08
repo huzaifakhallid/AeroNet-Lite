@@ -2,7 +2,8 @@
 """
 AeroNet Lite - app_dashboard.py
 Opens the unified dashboard and runs the live 20-step simulation.
-Usage:  python app_dashboard.py
+# Usage:  python app_dashboard.py
+# Last Refactored: 2026-05-08
 """
 
 import matplotlib

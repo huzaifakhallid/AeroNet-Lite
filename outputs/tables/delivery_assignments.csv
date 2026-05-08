@@ -1,0 +1,6 @@
+delivery_id,pickup_cell,dropoff_cell,weight,priority,category,status,assigned_drone_id,route_cost
+DEL-001,"(1, 9)","(0, 2)",0.72,urgent,Jewelry,in-transit,D02,15.999999999999998
+DEL-002,"(1, 8)","(6, 7)",1.39,urgent,Sports,in-transit,D01,18.2
+DEL-003,"(1, 3)","(1, 9)",0.93,normal,Clothing,delayed,,0.0
+DEL-004,"(9, 2)","(3, 5)",1.3,normal,Pet Supplies,delayed,,0.0
+DEL-005,"(0, 0)","(7, 5)",1.49,normal,Snacks,delayed,,0.0

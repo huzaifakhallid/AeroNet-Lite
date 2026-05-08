@@ -1,4 +1,4 @@
-# AeroNet Lite 🚀
+# AeroNet Lite
 
 **Autonomous Drone Delivery Simulation with CSP, Fleet Planning, A\* Routing, Real-Time Replanning, Demand Forecasting, and Anomaly Detection.**
 

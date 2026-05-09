@@ -59,6 +59,10 @@ class AeroNetDashboard:
         self._alert_label: Optional[tk.Label] = None
         self._demand_stats_frame: Optional[tk.Frame] = None
         self._anomaly_stats_frame: Optional[tk.Frame] = None
+        self._selected_demand_model: Optional[str] = None
+        self._selected_anomaly_model: Optional[str] = None
+        self._model_select_vars: dict[str, tk.StringVar] = {}
+        self._model_select_labels: dict[str, dict[str, str]] = {}
 
         self._demand_fig: Optional[Figure] = None
         self._demand_ax = None
@@ -380,23 +384,75 @@ class AeroNetDashboard:
     def UpdateModelStats(self, demand_info, anomaly_info):
         self.demand_model_info = demand_info
         self.anomaly_model_info = anomaly_info
+        selected_demand = self._get_selected_model_info("demand", demand_info)
+        selected_anomaly = self._get_selected_model_info("anomaly", anomaly_info)
         self._fill_stats_card(self._demand_stats_frame, demand_info,
-                              ["mae", "rmse", "r2"], "#004085")
+                              selected_demand, ["mae", "rmse", "r2"],
+                              "#004085", "demand")
         self._fill_stats_card(self._anomaly_stats_frame, anomaly_info,
-                              ["accuracy", "precision", "recall", "f1"], "#721c24")
+                              selected_anomaly, ["accuracy", "precision", "recall", "f1"],
+                              "#721c24", "anomaly")
 
-        if demand_info and "y_test" in demand_info and "y_pred" in demand_info:
+        if selected_demand and "y_test" in selected_demand and "y_pred" in selected_demand:
             self.UpdateDemandForecastPlot(
-                demand_info["y_test"], demand_info["y_pred"], demand_info)
+                selected_demand["y_test"], selected_demand["y_pred"], selected_demand)
         if demand_info:
             self.UpdateDemandHeatmap(self.state.grid)
-        if anomaly_info and "confusion_matrix" in anomaly_info:
+        if selected_anomaly and "confusion_matrix" in selected_anomaly:
             self.UpdateAnomalyConfusionMatrix(
-                anomaly_info["confusion_matrix"],
-                anomaly_info.get("class_names", []))
+                selected_anomaly["confusion_matrix"],
+                selected_anomaly.get("class_names", []))
 
-    def _fill_stats_card(self, card_frame, info, keys, accent):
-        if card_frame is None or info is None:
+    def _get_selected_model_info(self, group, info):
+        if info is None:
+            return None
+        all_results = info.get("all_results", {})
+        best_name = info.get("best_name")
+        model_names = list(all_results.keys()) if all_results else []
+        if not model_names and best_name:
+            model_names = [best_name]
+
+        selected_attr = f"_selected_{group}_model"
+        selected_name = getattr(self, selected_attr)
+        if selected_name not in model_names:
+            selected_name = best_name if best_name in model_names else (model_names[0] if model_names else best_name)
+            setattr(self, selected_attr, selected_name)
+
+        selected = all_results.get(selected_name, info)
+        selected_info = dict(selected)
+        selected_info["selected_name"] = selected_name
+        selected_info["best_name"] = best_name
+        if all_results:
+            selected_info["all_results"] = all_results
+        return selected_info
+
+    def _model_option_label(self, model_name, best_name):
+        if model_name == best_name:
+            return f"{model_name} (Best)"
+        return model_name
+
+    def _on_model_selected(self, group, label):
+        selected_name = self._model_select_labels.get(group, {}).get(label, label)
+        setattr(self, f"_selected_{group}_model", selected_name)
+
+        if group == "demand":
+            selected = self._get_selected_model_info("demand", self.demand_model_info)
+            self._fill_stats_card(self._demand_stats_frame, self.demand_model_info,
+                                  selected, ["mae", "rmse", "r2"], "#004085", "demand")
+            if selected and "y_test" in selected and "y_pred" in selected:
+                self.UpdateDemandForecastPlot(selected["y_test"], selected["y_pred"], selected)
+            return
+
+        selected = self._get_selected_model_info("anomaly", self.anomaly_model_info)
+        self._fill_stats_card(self._anomaly_stats_frame, self.anomaly_model_info,
+                              selected, ["accuracy", "precision", "recall", "f1"],
+                              "#721c24", "anomaly")
+        if selected and "confusion_matrix" in selected:
+            self.UpdateAnomalyConfusionMatrix(
+                selected["confusion_matrix"], selected.get("class_names", []))
+
+    def _fill_stats_card(self, card_frame, source_info, selected_info, keys, accent, group):
+        if card_frame is None or source_info is None or selected_info is None:
             return
         # Find the inner metric frame
         children = card_frame.winfo_children()
@@ -406,14 +462,41 @@ class AeroNetDashboard:
         for w in inner.winfo_children():
             w.destroy()
 
-        if "best_name" in info:
-            tk.Label(inner, text=f"Best: {info['best_name']}",
-                     font=("Consolas", 8, "bold"), fg=TEXT, bg=BG2).pack(anchor="w")
+        all_results = source_info.get("all_results", {})
+        best_name = source_info.get("best_name")
+        model_names = list(all_results.keys()) if all_results else [selected_info.get("selected_name")]
+        model_names = [name for name in model_names if name]
+        if model_names:
+            selector_row = tk.Frame(inner, bg=BG2)
+            selector_row.pack(fill="x", pady=(0, 2))
+            tk.Label(selector_row, text="Model:", font=("Consolas", 8, "bold"),
+                     fg=TEXT, bg=BG2).pack(side="left")
+
+            labels = [self._model_option_label(name, best_name) for name in model_names]
+            self._model_select_labels[group] = dict(zip(labels, model_names))
+            selected_label = self._model_option_label(
+                selected_info.get("selected_name"), best_name)
+            var = self._model_select_vars.get(group)
+            if var is None:
+                var = tk.StringVar(value=selected_label)
+                self._model_select_vars[group] = var
+            else:
+                var.set(selected_label)
+
+            menu = tk.OptionMenu(
+                selector_row, var, *labels,
+                command=lambda value, group=group: self._on_model_selected(group, value))
+            menu.config(font=("Consolas", 8, "bold"), fg=TEXT, bg=BG2,
+                        activebackground=ACCENT, relief="flat", bd=0,
+                        highlightthickness=1, highlightbackground=ACCENT)
+            menu["menu"].config(font=("Consolas", 8))
+            menu.pack(side="left", padx=(4, 0))
+
         row = tk.Frame(inner, bg=BG2)
         row.pack(fill="x")
         for k in keys:
-            if k in info:
-                val = info[k]
+            if k in selected_info:
+                val = selected_info[k]
                 display = f"{val:.4f}" if isinstance(val, float) and val < 10 else str(val)
                 cell = tk.Frame(row, bg=ACCENT, bd=0)
                 cell.pack(side="left", padx=2, pady=2)

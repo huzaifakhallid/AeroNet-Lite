@@ -223,11 +223,11 @@ class AeroNetDashboard:
         chart_row1 = tk.Frame(parent, bg=BG)
         chart_row1.pack(fill="both", expand=True, pady=3)
 
-        self._demand_fig = Figure(figsize=(4, 2.4), dpi=100, facecolor=BG2)
+        self._demand_fig = Figure(figsize=(4.5, 1.4), dpi=150, facecolor=BG2)
         self._demand_ax = self._demand_fig.add_subplot(111)
         self._demand_canvas = self._embed_fig(chart_row1, self._demand_fig, side="left")
 
-        self._cm_fig = Figure(figsize=(4, 2.4), dpi=100, facecolor=BG2)
+        self._cm_fig = Figure(figsize=(2.5, 1.4), dpi=150, facecolor=BG2)
         self._cm_ax = self._cm_fig.add_subplot(111)
         self._cm_canvas = self._embed_fig(chart_row1, self._cm_fig, side="left")
 
@@ -235,7 +235,7 @@ class AeroNetDashboard:
         chart_row2 = tk.Frame(parent, bg=BG)
         chart_row2.pack(fill="both", expand=True, pady=3)
 
-        self._heatmap_fig = Figure(figsize=(4, 2.4), dpi=100, facecolor=BG2)
+        self._heatmap_fig = Figure(figsize=(3.4, 3.4), dpi=150, facecolor=BG2)
         self._heatmap_ax = self._heatmap_fig.add_subplot(111)
         self._heatmap_canvas = self._embed_fig(chart_row2, self._heatmap_fig, side="left")
 
@@ -452,14 +452,33 @@ class AeroNetDashboard:
         ax.set_facecolor(BG)
         demand = np.array([[grid[r][c].demand for c in range(GRID_COLS)]
                            for r in range(GRID_ROWS)])
-        im = ax.imshow(demand, cmap="YlOrRd", origin="upper")
+        im = ax.imshow(demand, cmap="YlOrRd", origin="upper", interpolation="nearest")
+        
+        # Add proper 10x10 grid
+        ax.set_xticks(np.arange(-0.5, GRID_COLS, 1), minor=True)
+        ax.set_yticks(np.arange(-0.5, GRID_ROWS, 1), minor=True)
+        ax.grid(which="minor", color="white", linestyle="-", linewidth=1.5)
+        ax.grid(which="major", visible=False)  # Remove the default grid lines passing through the middle
+        
+        # Set major ticks for labels
+        ax.set_xticks(np.arange(0, GRID_COLS, 1))
+        ax.set_yticks(np.arange(0, GRID_ROWS, 1))
+        ax.set_xticklabels(np.arange(0, GRID_COLS))
+        ax.set_yticklabels(np.arange(0, GRID_ROWS))
+        
+        # Add demand values
+        demand_max = demand.max()
+        demand_min = demand.min()
+        threshold = demand_min + (demand_max - demand_min) / 2.0
+        
         for r in range(GRID_ROWS):
             for c in range(GRID_COLS):
+                text_color = "white" if demand[r, c] > threshold else "black"
                 ax.text(c, r, f"{demand[r,c]:.1f}", ha="center", va="center",
-                        fontsize=6, color="black", weight="bold")
+                        fontsize=6, color=text_color, weight="bold")
         ax.set_title("Demand Heatmap", color=TEXT, fontsize=9, weight="bold")
         ax.tick_params(colors=TEXT, labelsize=7)
-        self._heatmap_fig.tight_layout(pad=1.0)
+        self._heatmap_fig.tight_layout(pad=0.5)
         self._heatmap_canvas.draw_idle()
 
     def UpdateAnomalyConfusionMatrix(self, cm, class_names):
@@ -479,8 +498,9 @@ class AeroNetDashboard:
             for j in range(n):
                 ax.text(j, i, str(cm[i, j]), ha="center", va="center",
                         color="white" if cm[i, j] > cm.max()/2 else TEXT, fontsize=8, weight="bold")
+        ax.grid(False)
         ax.set_title("Confusion Matrix", color=TEXT, fontsize=9, weight="bold")
-        self._cm_fig.tight_layout(pad=1.0)
+        self._cm_fig.tight_layout(pad=0.2)
         self._cm_canvas.draw_idle()
 
     # --------------------------------------------------- fleet & delivery

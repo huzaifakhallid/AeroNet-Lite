@@ -49,7 +49,14 @@ def main() -> None:
     state = InitializeSimulation()
 
     # Build GUI
+    try:
+        from ctypes import windll
+        windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        pass
+
     root = tk.Tk()
+    root.tk.call('tk', 'scaling', 1.5)  # Scale explicitly for 1080p baseline without dynamic calculations
     dashboard = AeroNetDashboard(root, state, demand_info, anomaly_info)
 
     # Start simulation controller

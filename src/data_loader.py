@@ -1,7 +1,5 @@
 """
 AeroNet Lite - Data Loader
-Helpers that load and lightly clean raw CSV files.
-Heavy feature-engineering lives in ml_demand.py / ml_anomaly.py.
 """
 
 from __future__ import annotations

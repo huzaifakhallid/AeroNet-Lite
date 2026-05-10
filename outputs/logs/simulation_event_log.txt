@@ -1,6 +1,7 @@
 [Step  1] Grid initialised (10x10).
 [Step  2] Layout validation: PASS.
 [Step  3] Demand model predictions applied to grid.
+[Step  3] Estimated delivery load from demand model: 8.7 kg.
 [Step  3] Fleet selected: 0L + 2H (cost=$3600, coverage=100%).
 [Step  3] Built 2 drones across 9 hubs.
 [Step  4] Generated 5 deliveries.
@@ -8,20 +9,25 @@
 [Step  6] D01 route planned (21 steps, cost=18.2).
 [Step  6] D02 route planned (19 steps, cost=16.0).
 [Step  7] Drones advanced (step 7).
+[Step  8] D02 reached pickup; heading to drop-off.
 [Step  8] Drones advanced (step 8).
 [Step  9] Drones advanced (step 9).
 [Step 10] Drones advanced (step 10).
-[Step 11] No-fly zone activated at (0,5).
-[Step 11] Drone D01 rerouted successfully (13 -> 4 steps).
+[Step 11] No-fly zone activated at (1,6).
+[Step 11] Drone D01 rerouted successfully (17 -> 17 steps).
+[Step 11] Drone D02 rerouted successfully (15 -> 15 steps).
+[Step 12] D01 reached pickup; heading to drop-off.
 [Step 12] Drones advanced (step 12).
 [Step 13] Drones advanced (step 13).
 [Step 14] Drones advanced (step 14).
 [Step 15] Demand heatmap updated from model.
 [Step 15] Drones advanced (step 15).
 [Step 16] Drones advanced (step 16).
+[Step 17] D02 completed drop-off; returning to hub.
 [Step 17] Drones advanced (step 17).
 [Step 18] Anomaly detected on D01: Battery anomaly.
 [Step 19] D01 returning to hub due to anomaly.
 [Step 19] Delivery DEL-002 delayed (anomaly).
+[Step 19] Drones advanced (step 19).
 [Step 20] Simulation complete.
-[Step 20] Completed: 1  |  Delayed: 4  |  Failed: 0
+[Step 20] Completed: 0  |  Delayed: 4  |  Failed: 0

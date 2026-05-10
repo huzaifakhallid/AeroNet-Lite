@@ -14,9 +14,10 @@ from config import (
     LIGHT_DRONE_COST, HEAVY_DRONE_COST,
     LIGHT_DRONE_PAYLOAD, HEAVY_DRONE_PAYLOAD,
     LIGHT_DRONE_RANGE, HEAVY_DRONE_RANGE,
+    COMMERCIAL, HOSPITAL, RESIDENTIAL,
     TABLE_DIR,
 )
-from grid_model import Drone, GetHubLocations, Cell
+from grid_model import Drone, GetCellsByCondition, Cell
 
 
 def CalculateFleetCost(light_count: int, heavy_count: int) -> int:
@@ -39,6 +40,30 @@ def EstimateCoveragePercentage(light_count: int, heavy_count: int, total_demand:
 def CalculateFleetScore(coverage_pct: float, budget_used_pct: float) -> float:
     """score = 0.75 * coverage - 0.25 * budget_used"""
     return 0.75 * coverage_pct - 0.25 * budget_used_pct
+
+
+def EstimateDemandLoadFromGrid(
+    grid: list[list[Cell]],
+    expected_deliveries: int,
+    baseline_weight: float = 1.5,
+) -> float:
+    """
+    Convert predicted per-cell demand intensity into a fleet-sizing load estimate.
+
+    The demand model writes a relative intensity score to each cell. We translate the
+    mean demand over likely drop-off zones into an expected per-delivery weight and
+    size the fleet against that aggregate load.
+    """
+    demand_cells = GetCellsByCondition(
+        grid,
+        lambda c: (not c.no_fly) and c.zone in {RESIDENTIAL, COMMERCIAL, HOSPITAL},
+    )
+    if not demand_cells or expected_deliveries <= 0:
+        return round(max(expected_deliveries, 0) * baseline_weight, 2)
+
+    avg_intensity = sum(cell.demand for cell in demand_cells) / len(demand_cells)
+    expected_weight = max(0.75, min(avg_intensity / 2.0, HEAVY_DRONE_PAYLOAD))
+    return round(expected_deliveries * expected_weight, 2)
 
 
 def SelectFleetBruteForce(total_demand: float, budget: int = DEFAULT_BUDGET) -> dict:

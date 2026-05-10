@@ -34,6 +34,53 @@ def FindAffectedDrones(
     return affected
 
 
+def DetermineRemainingTargets(
+    drone: Drone,
+    delivery: Delivery | None,
+) -> list[tuple[int, int]]:
+    """Return the remaining milestones the drone still needs to visit."""
+    if delivery is None:
+        return [] if drone.current_position == drone.home_hub else [drone.home_hub]
+
+    if drone.current_target == delivery.pickup_cell:
+        goals = [delivery.pickup_cell, delivery.dropoff_cell, drone.home_hub]
+    elif drone.current_target == delivery.dropoff_cell:
+        goals = [delivery.dropoff_cell, drone.home_hub]
+    else:
+        goals = [drone.home_hub]
+
+    while goals and goals[0] == drone.current_position:
+        goals.pop(0)
+    return goals
+
+
+def BuildRemainingRoute(
+    start: tuple[int, int],
+    goals: list[tuple[int, int]],
+    grid: list[list[Cell]],
+) -> AStarResult:
+    """Plan a stitched route from *start* through each remaining goal in order."""
+    if not goals:
+        return AStarResult(path=[start], total_cost=0.0, success=True, message="Already at final target.")
+
+    full_path: list[tuple[int, int]] = []
+    total_cost = 0.0
+    current = start
+
+    for goal in goals:
+        result = RunAStar(current, goal, grid)
+        if not result.success:
+            return result
+        if full_path and result.path and result.path[0] == full_path[-1]:
+            full_path.extend(result.path[1:])
+        else:
+            full_path.extend(result.path)
+        total_cost += result.total_cost
+        current = goal
+
+    return AStarResult(path=full_path, total_cost=total_cost, success=True, message="Remaining route planned.")
+
+
 def RerouteDrone(
     drone: Drone,
     delivery: Delivery | None,
@@ -44,14 +91,12 @@ def RerouteDrone(
     Falls back to hub if target is also blocked.
     """
     start = drone.current_position
-    goal = drone.current_target or drone.home_hub
-    result = RunAStar(start, goal, grid)
+    goals = DetermineRemainingTargets(drone, delivery)
+    result = BuildRemainingRoute(start, goals, grid)
     if result.success:
-        drone.planned_route = (
-            drone.completed_path[:]
-            + result.path
-        )
-        drone.route_step_index = len(drone.completed_path)
+        prior_path = drone.completed_path[:-1] if drone.completed_path else []
+        drone.planned_route = prior_path + result.path
+        drone.route_step_index = len(prior_path)
         drone.status = "rerouted"
     return result
 
@@ -60,8 +105,9 @@ def ForceReturnToHub(drone: Drone, grid: list[list[Cell]]) -> AStarResult:
     """Try to route the drone back to its home hub."""
     result = RunAStar(drone.current_position, drone.home_hub, grid)
     if result.success:
-        drone.planned_route = drone.completed_path[:] + result.path
-        drone.route_step_index = len(drone.completed_path)
+        prior_path = drone.completed_path[:-1] if drone.completed_path else []
+        drone.planned_route = prior_path + result.path
+        drone.route_step_index = len(prior_path)
         drone.status = "returning"
         drone.current_target = drone.home_hub
     else:

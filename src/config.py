@@ -35,7 +35,7 @@ COMMERCIAL_MOVE_COST = 0.8
 SIMULATION_STEPS = 20
 NUM_DELIVERIES = 8          # default deliveries to generate
 DEMO_NUM_DELIVERIES = 5     # fewer deliveries for dashboard demo
-DRONE_STEPS_PER_TICK = 2    # cells per tick in demo mode
+DRONE_STEPS_PER_TICK = 1    # one logical cell per tick; controller interpolates motion frames
 
 # -- Zone names ---------------------------------------------------------------
 RESIDENTIAL = "Residential"

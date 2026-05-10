@@ -1,6 +1,7 @@
 import pytest
-from src.fleet_selector import SelectFleetBruteForce
+from src.fleet_selector import SelectFleetBruteForce, EstimateDemandLoadFromGrid
 from src.config import DEFAULT_BUDGET
+from src.grid_model import CreateSampleGrid
 
 def test_no_fleet_exceeds_budget():
     res = SelectFleetBruteForce(total_demand=100.0)
@@ -27,3 +28,17 @@ def test_best_fleet_has_valid_score():
     res = SelectFleetBruteForce(total_demand=100.0)
     assert "top5" in res
     assert len(res["top5"]) > 0
+
+def test_grid_demand_influences_estimated_load():
+    grid = CreateSampleGrid()
+    for row in grid:
+        for cell in row:
+            cell.demand = 1.0
+    low_load = EstimateDemandLoadFromGrid(grid, expected_deliveries=5)
+
+    for row in grid:
+        for cell in row:
+            cell.demand = 4.0
+    high_load = EstimateDemandLoadFromGrid(grid, expected_deliveries=5)
+
+    assert high_load > low_load

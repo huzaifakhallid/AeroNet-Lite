@@ -95,6 +95,12 @@ class AeroNetDashboard:
         x1, y1, x2, y2 = self._cell_bbox(row, col)
         return (x1 + x2) / 2, (y1 + y2) / 2
 
+    def _position_center(self, row, col):
+        """Return canvas centre for integer or fractional grid coordinates."""
+        x = GRID_PAD + (col * CS) + (CS / 2)
+        y = GRID_PAD + (row * CS) + (CS / 2)
+        return x, y
+
     # ----------------------------------------------------------- icon drawing
     def _draw_hub(self, cx, cy, s=10):
         c = self._grid_canvas
@@ -324,18 +330,24 @@ class AeroNetDashboard:
             cx, cy = self._cell_center(*d.dropoff_cell)
             self._draw_dropoff(cx + 12, cy - 12)
 
-    def DrawDrones(self):
+    def DrawDrones(self, positions=None):
         if self._grid_canvas is None:
             return
         self._grid_canvas.delete("drones")
         for drone in self.state.drones:
-            cx, cy = self._cell_center(*drone.current_position)
+            row, col = positions.get(drone.drone_id, drone.current_position) if positions else drone.current_position
+            cx, cy = self._position_center(row, col)
             color = "#00e5ff" if drone.drone_type == "light" else "#ff9100"
             if drone.anomaly_status != "normal":
                 color = RED
             self._draw_drone(cx, cy, drone.drone_type, color)
             self._grid_canvas.create_text(cx, cy - 14, text=drone.drone_id,
                                           fill=TEXT, font=("Consolas", 7), tags="drones")
+
+    def RenderMotionFrame(self, positions):
+        """Redraw only the moving drone layer for smooth in-between frames."""
+        self.DrawDrones(positions=positions)
+        self.root.update_idletasks()
 
     def DrawRoutes(self, routes=None, color="#00ff00"):
         if self._grid_canvas is None:

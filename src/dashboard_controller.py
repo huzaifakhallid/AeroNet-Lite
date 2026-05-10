@@ -16,7 +16,12 @@ from grid_model import (
     SimulationState, GetHubLocations, GetAllCells,
 )
 from layout_validator import ValidateLayout, PrintValidationReport, SaveValidationReport
-from fleet_selector import SelectFleetBruteForce, BuildDroneFleet, SaveFleetResults
+from fleet_selector import (
+    SelectFleetBruteForce,
+    BuildDroneFleet,
+    EstimateDemandLoadFromGrid,
+    SaveFleetResults,
+)
 from delivery_generator import GenerateDeliveries, SaveDeliveries
 from delivery_assigner import AssignDeliveriesToDrones, SaveDeliveryAssignments
 from astar_planner import PlanDeliveryRoute, RunAStar, CalculateRouteCost
@@ -29,7 +34,9 @@ from report_generator import SaveReport
 
 logger = logging.getLogger(__name__)
 
-TICK_MS = 700
+TICK_MS = 240
+ANIMATION_FRAMES = 6
+ANIMATION_FRAME_MS = 35
 
 
 class SimulationController:
@@ -115,10 +122,11 @@ class SimulationController:
         self.dashboard.UpdateModelStats(self.demand_model_info, self.anomaly_model_info)
         self.dashboard.UpdateDemandHeatmap(self.state.grid)
 
-        total_demand = DEMO_NUM_DELIVERIES * 1.5
+        total_demand = EstimateDemandLoadFromGrid(self.state.grid, DEMO_NUM_DELIVERIES)
         self.fleet_results = SelectFleetBruteForce(total_demand, DEFAULT_BUDGET)
         SaveFleetResults(self.fleet_results)
         best = self.fleet_results["best"]
+        LogEvent(self.state, f"Estimated delivery load from demand model: {total_demand:.1f} kg.")
         LogEvent(self.state, f"Fleet selected: {best['light']}L + {best['heavy']}H "
                  f"(cost=${best['total_cost']}, coverage={best['coverage_pct']:.0%}).")
 
@@ -176,33 +184,94 @@ class SimulationController:
     def _make_move_step(self, step_num):
         def _run():
             self.state.current_step = step_num
-            self._move_drones()
-            self._check_completions()
-            LogEvent(self.state, f"Drones advanced (step {step_num}).")
-            self._refresh()
             if step_num < 10:
-                self._schedule(self._make_move_step(step_num + 1))
+                next_callback = self._make_move_step(step_num + 1)
             else:
-                self._schedule(self.RunStep11)
+                next_callback = self.RunStep11
+            self._run_animated_move_step(step_num, next_callback)
         return _run
 
-    def _move_drones(self, steps=DRONE_STEPS_PER_TICK):
+    def _run_animated_move_step(self, step_num, next_callback, remaining_steps=DRONE_STEPS_PER_TICK):
+        start_positions = self._advance_drones_one_cell()
+        if not start_positions:
+            self._finish_move_step(step_num, next_callback)
+            return
+
+        self._animate_motion_frame(
+            start_positions=start_positions,
+            frame_index=1,
+            on_complete=lambda: self._after_animated_substep(step_num, next_callback, remaining_steps),
+        )
+
+    def _after_animated_substep(self, step_num, next_callback, remaining_steps):
+        if remaining_steps > 1:
+            self._run_animated_move_step(step_num, next_callback, remaining_steps - 1)
+            return
+        self._finish_move_step(step_num, next_callback)
+
+    def _advance_drones_one_cell(self):
+        start_positions: dict[str, tuple[int, int]] = {}
         for drone in self.state.drones:
             if drone.status not in ("en-route", "rerouted", "returning"):
                 continue
-            for _ in range(steps):
-                if drone.route_step_index < len(drone.planned_route) - 1:
-                    drone.route_step_index += 1
-                    new_pos = drone.planned_route[drone.route_step_index]
-                    drone.current_position = new_pos
-                    drone.completed_path.append(new_pos)
-                    drone.battery = max(drone.battery - 3.0, 0)
-                else:
-                    if drone.status == "returning":
-                        drone.status = "idle"
-                    else:
-                        drone.status = "idle"
-                    break
+            if drone.route_step_index < len(drone.planned_route) - 1:
+                start_positions[drone.drone_id] = drone.current_position
+                drone.route_step_index += 1
+                new_pos = drone.planned_route[drone.route_step_index]
+                drone.current_position = new_pos
+                drone.completed_path.append(new_pos)
+                drone.battery = max(drone.battery - 3.0, 0)
+                self._update_drone_target(drone)
+            else:
+                drone.status = "idle"
+        return start_positions
+
+    def _animate_motion_frame(self, start_positions, frame_index, on_complete):
+        progress = frame_index / ANIMATION_FRAMES
+        positions = {}
+        for drone in self.state.drones:
+            if drone.drone_id not in start_positions:
+                continue
+            start_row, start_col = start_positions[drone.drone_id]
+            end_row, end_col = drone.current_position
+            interp_row = start_row + (end_row - start_row) * progress
+            interp_col = start_col + (end_col - start_col) * progress
+            positions[drone.drone_id] = (interp_row, interp_col)
+
+        self.dashboard.RenderMotionFrame(positions)
+
+        if frame_index < ANIMATION_FRAMES:
+            self.root.after(
+                ANIMATION_FRAME_MS,
+                lambda: self._animate_motion_frame(start_positions, frame_index + 1, on_complete),
+            )
+            return
+
+        on_complete()
+
+    def _finish_move_step(self, step_num, next_callback):
+        self._check_completions()
+        LogEvent(self.state, f"Drones advanced (step {step_num}).")
+        self._refresh()
+        self._schedule(next_callback)
+
+    def _update_drone_target(self, drone):
+        if drone.assigned_delivery_id is None:
+            return
+
+        delivery = next(
+            (d for d in self.state.deliveries if d.delivery_id == drone.assigned_delivery_id),
+            None,
+        )
+        if delivery is None:
+            return
+
+        if drone.current_target == delivery.pickup_cell and drone.current_position == delivery.pickup_cell:
+            drone.current_target = delivery.dropoff_cell
+            LogEvent(self.state, f"{drone.drone_id} reached pickup; heading to drop-off.")
+        elif drone.current_target == delivery.dropoff_cell and drone.current_position == delivery.dropoff_cell:
+            drone.current_target = drone.home_hub
+            LogEvent(self.state, f"{drone.drone_id} completed drop-off; returning to hub.")
 
     def _check_completions(self):
         for drone in self.state.drones:
@@ -270,14 +339,11 @@ class SimulationController:
     def _make_post_disruption_step(self, step_num):
         def _run():
             self.state.current_step = step_num
-            self._move_drones()
-            self._check_completions()
-            LogEvent(self.state, f"Drones advanced (step {step_num}).")
-            self._refresh()
             if step_num < 14:
-                self._schedule(self._make_post_disruption_step(step_num + 1))
+                next_callback = self._make_post_disruption_step(step_num + 1)
             else:
-                self._schedule(self._make_demand_step(15))
+                next_callback = self._make_demand_step(15)
+            self._run_animated_move_step(step_num, next_callback)
         return _run
 
     # ------------------------------------------- demand update steps 15-17
@@ -294,14 +360,11 @@ class SimulationController:
                     self.dashboard.UpdateDemandHeatmap(self.state.grid)
                 except Exception:
                     LogEvent(self.state, "Demand heatmap update skipped.")
-            self._move_drones()
-            self._check_completions()
-            LogEvent(self.state, f"Drones advanced (step {step_num}).")
-            self._refresh()
             if step_num < 17:
-                self._schedule(self._make_demand_step(step_num + 1))
+                next_callback = self._make_demand_step(step_num + 1)
             else:
-                self._schedule(self.RunStep18)
+                next_callback = self.RunStep18
+            self._run_animated_move_step(step_num, next_callback)
         return _run
 
     # ------------------------------------------------- anomaly step 18
@@ -361,10 +424,7 @@ class SimulationController:
                 LogEvent(self.state, f"{drone.drone_id} cannot return to hub - FAILED.")
         else:
             LogEvent(self.state, "No anomaly response needed.")
-        self._move_drones()
-        self._check_completions()
-        self._refresh()
-        self._schedule(self.RunStep20, 1000)
+        self._run_animated_move_step(19, self.RunStep20)
 
     # ------------------------------------------------- final step 20
     def RunStep20(self):

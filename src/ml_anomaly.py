@@ -1,7 +1,7 @@
 """
 AeroNet Lite - Anomaly Detection (ML)
 Train classification models on drone telemetry to detect anomalies.
-Rule-based labelling → Decision Tree + Random Forest → integration hooks.
+Rule-based labelling -> Decision Tree + Random Forest -> integration hooks.
 """
 
 from __future__ import annotations

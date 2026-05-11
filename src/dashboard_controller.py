@@ -1,6 +1,5 @@
 """
 AeroNet Lite - Dashboard Controller
-Event-driven simulation using root.after() instead of time.sleep().
 """
 
 from __future__ import annotations

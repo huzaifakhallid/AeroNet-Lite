@@ -1,6 +1,6 @@
 """
 AeroNet Lite - Utility Helpers
-Miscellaneous helpers used across modules.
+Miscellaneous helpers functions
 """
 
 from __future__ import annotations
